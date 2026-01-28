@@ -1,0 +1,16 @@
+[general]
+# "resolution" = [H, W]; used to form multi-resolution buckets if enable_bucket=true
+#qwen_image_edit_no_resize_control = false # optional, default is false. Disable resizing of control image
+#qwen_image_edit_control_resolution = [1024, 1024] # optional, default is None. Specify the resolution of the control image.
+#resolution = [960, 544]
+caption_extension = ".txt"
+batch_size = 1
+enable_bucket = false
+bucket_no_upscale = false
+
+
+[[datasets]]
+image_directory = "/workspace/layered/image_data"
+cache_directory = "/workspace/layered/cache_dir"
+num_repeats = 1
+multiple_target=true

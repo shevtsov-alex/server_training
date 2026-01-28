@@ -1,0 +1,10 @@
+transformers>=4.51.3          # required for Qwen2.5-VL support :contentReference[oaicite:1]{index=1}
+git+https://github.com/huggingface/diffusers  # latest diffusers recommended :contentReference[oaicite:2]{index=2}
+torch                         # install the right CUDA build for your machine (see note below)
+accelerate
+safetensors
+huggingface_hub
+numpy
+Pillow
+tqdm
+packaging
