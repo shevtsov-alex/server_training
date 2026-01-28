@@ -13,12 +13,15 @@ accelerate launch --num_cpu_threads_per_process 1 --mixed_precision bf16 /worksp
     --timestep_sampling qwen_shift \
     --weighting_scheme none \
     --optimizer_type adafactor --learning_rate 4e-6 --gradient_checkpointing\
-    --optimizer_args "relative_step=False" "scale_parameter=False" "warmup_init=False" "weight_decay=0.0" \
+    --optimizer_args "relative_step=False" "scale_parameter=False" "warmup_init=False" "weight_decay=0.01" \
     --max_grad_norm 0 --lr_scheduler linear \
     --max_data_loader_n_workers 2 --persistent_data_loader_workers \
-    --max_train_epochs 150 --save_every_n_epochs 25 --seed 42 \
+    --max_train_epochs 300 --save_every_n_epochs 50 --seed 42 \
     --dataset_config /workspace/layered/dataset.toml \
     --output_dir /workspace/layered/model/newfull \
     --output_name layered-full \
     --model_version layered \
+    --logging_dir /workspace/layered/model/newfull/logs \
+    --log_prefix layered-full-300_ \
+    --log_with tensorboard \
     --remove_first_image_from_target
