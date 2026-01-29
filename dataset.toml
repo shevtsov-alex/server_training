@@ -5,7 +5,7 @@
 resolution = [2160, 3168]
 caption_extension = ".txt"
 batch_size = 1
-enable_bucket = false
+enable_bucket = true #need to preserve the information of image (scaled to closes bucket and not croped)
 bucket_no_upscale = false
 
 
