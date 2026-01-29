@@ -19,11 +19,12 @@ files=("$CONTROL_IMAGES"/*.png)
 #layered-lora
 #    --attn_mode sdpa \
 #    --lora_multiplier 1.0 --lora_weight /workspace/layered/model/newfull/layered-lora.safetensors \
+#layered-fullscale-fullhd_bck_false-150-2026_01_29__09_28_53/layered-full-000025.safetensors
 i=1
 for f in "${files[@]}"; do
 
   python /workspace/musubi-tuner/src/musubi_tuner/qwen_image_generate_image.py \
-    --dit /workspace/layered/model/newfull/layered-full.safetensors \
+    --dit /workspace/layered/model/layered-fullscale-fullhd_bck_false-150-2026_01_29__09_28_53/layered-full.safetensors \
     --vae /workspace/layered/model/default/qwen_image_layered_vae.safetensors \
     --text_encoder /workspace/models/qwen_2.5_vl_7b_bf16.safetensors \
     --control_image_path "$f" \
@@ -39,7 +40,7 @@ for f in "${files[@]}"; do
     --model_version layered \
     --resize_control_to_image_size
 
-  bash /workspace/layered/temp_files_management.sh -s "$RESULT_TMP" -d "$RESULT_PATH" -p "full_300_${i}_"
+  bash /workspace/layered/temp_files_management.sh -s "$RESULT_TMP" -d "$RESULT_PATH" -p "full-step-150-lr4e6-fullhd-bckfalse_${i}_"
 
   ((i++))
 done

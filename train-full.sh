@@ -3,7 +3,7 @@
 # Generate timestamp-based folder name
 EPOCHS=150
 TIMESTAMP=$(date +"%Y_%m_%d__%H_%M_%S")
-RUN_NAME="layered-full-${EPOCHS}-${TIMESTAMP}"
+RUN_NAME="layered-fullscale-fullhd_bck_false-${EPOCHS}-${TIMESTAMP}"
 OUTPUT_BASE="/workspace/layered/model"
 RUN_DIR="${OUTPUT_BASE}/${RUN_NAME}"
 
@@ -27,7 +27,7 @@ accelerate launch --num_cpu_threads_per_process 1 --mixed_precision bf16 /worksp
     --weighting_scheme none \
     --optimizer_type adafactor --learning_rate 4e-6 --gradient_checkpointing\
     --optimizer_args "relative_step=False" "scale_parameter=False" "warmup_init=False" "weight_decay=0.01" \
-    --max_grad_norm 0 --lr_scheduler linear \
+    --max_grad_norm 0 --lr_scheduler constant \
     --max_data_loader_n_workers 2 --persistent_data_loader_workers \
     --max_train_epochs ${EPOCHS} --save_every_n_epochs 25 --seed 42 \
     --dataset_config /workspace/layered/dataset.toml \

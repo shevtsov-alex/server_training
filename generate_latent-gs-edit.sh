@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+cd /workspace
 set -e  # завершить при ошибке
 
 # Проверка существования папки musubi-tuner
