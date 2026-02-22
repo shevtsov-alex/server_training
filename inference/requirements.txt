@@ -1,0 +1,8 @@
+Pillow
+numpy
+tqdm
+python-dotenv
+pytoshop
+google-genai
+diffsynth
+torch
