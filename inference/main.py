@@ -6,7 +6,7 @@ import torch
 from PIL import Image
 from model import QIL
 from filtering import contains_character
-from helper import scale_down_image, crop_to_content, restore_from_crop, create_psd
+from helper import scale_down_image, crop_to_content, restore_from_crop, create_psd, is_empty_layer
 import argparse
 from dotenv import load_dotenv
 from tqdm import tqdm
@@ -21,8 +21,8 @@ Keep internal shadows that define the character's body and clothes. Exclude shad
 Layer Hierarchy: Characters (Each person isolated with their handheld objects), Foreground (Any object blocking or overlapping a character must be its own separate layer) and Background (The remaining environment including all floor and wall shadows). 
 """
 
-MODEL = QIL(device="cuda", dtype=torch.bfloat16)
-SCALE_MAX_SIDE = 640
+MODEL = QIL(device="cuda", dtype=torch.bfloat16, model_type="hf")#QIL(device="cuda", dtype=torch.bfloat16)
+SCALE_MAX_SIDE = 1024
 
 
 def process_single_level(original_image: Image.Image, images: list[Image.Image], level_num: int) -> tuple[list[Image.Image], list[Image.Image]]:
@@ -32,7 +32,14 @@ def process_single_level(original_image: Image.Image, images: list[Image.Image],
     character_layers = []
     for image in tqdm(images):
         for layer in MODEL.inference(image, prompt):
+
+            """Skip empty layers"""
+            if is_empty_layer(layer):
+                continue
+
+            """Check if the layer contains a character or body parts from the original image"""
             has_character = contains_character(original_scaled, scale_down_image(layer, SCALE_MAX_SIDE))
+
             if has_character is None:
                 raise ValueError(f"Error: contains_character returned None for image")
             if has_character:
@@ -50,6 +57,7 @@ def main(input_image: str, level_num: int):
     
     ready_layers = [original_img]
     total_start = time.time()
+    cnt = 0
 
     if level_num == 0:
         level_todo_images = [original_img]
@@ -61,7 +69,13 @@ def main(input_image: str, level_num: int):
             print(f"Level {i} done in {level_elapsed:.2f}s")
             ready_layers.extend(level_ready_layers)
             level_todo_images = level_character_layers
-        
+
+            for img in level_todo_images:
+                img.save(input_image.split(".png")[0] + f"_level_{i}_{cnt}_org.png")
+                cnt += 1
+            for img in level_ready_layers:
+                img.save(input_image.split(".png")[0] + f"_level_{i}_{cnt}_ready.png")
+                cnt += 1
         ready_layers.extend(level_todo_images)
     else:
         level_start = time.time()
@@ -73,7 +87,10 @@ def main(input_image: str, level_num: int):
     total_elapsed = time.time() - total_start
     print(f"Ready layers: {len(ready_layers)}")
     print(f"Total processing time: {total_elapsed:.2f}s")
-    
+    cnt = 0
+    for img in ready_layers:
+        img.save(input_image.split(".png")[0] + f"_{cnt}_ready.png")
+        cnt += 1
     create_psd(ready_layers, input_image.split(".png")[0] + "_layers.psd")
 
             

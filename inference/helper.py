@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pytoshop.enums import ColorMode, ChannelId, Compression
 from pytoshop.user.nested_layers import Image as PsdLayer, nested_layers_to_psd
 
+ALPHA_THRESHOLD = 4
 
 @dataclass(frozen=True)
 class CropBox:
@@ -26,8 +27,8 @@ class CropBox:
 
 def crop_to_content(
     img: Image.Image,
-    alpha_threshold: int = 4,
     margin: int = 20,
+    min_side: int = 640,
 ) -> tuple[Image.Image, CropBox]:
     """Crop an RGBA image to the bounding box of its visible pixels plus a margin.
 
@@ -37,6 +38,9 @@ def crop_to_content(
 
     ``margin`` extra transparent pixels are kept around the content on
     every side (clamped to the canvas bounds).
+
+    ``min_side`` guarantees the cropped image is at least this many pixels
+    on its shortest side; the crop box is expanded symmetrically when needed.
 
     Returns the cropped image and a ``CropBox`` that records the original
     canvas size and the padding removed from each side, so the crop can
@@ -48,7 +52,7 @@ def crop_to_content(
     rgba = np.array(img.convert("RGBA"))
     h, w = rgba.shape[:2]
     alpha = rgba[:, :, 3]
-    visible = alpha > alpha_threshold
+    visible = alpha > ALPHA_THRESHOLD
 
     rows_with_content = np.any(visible, axis=1)
     cols_with_content = np.any(visible, axis=0)
@@ -64,6 +68,32 @@ def crop_to_content(
     col_min = max(col_min - margin, 0)
     col_max = min(col_max + margin, w - 1)
 
+    crop_h = row_max - row_min + 1
+    crop_w = col_max - col_min + 1
+
+    if crop_h < min_side:
+        deficit = min_side - crop_h
+        expand_top = deficit // 2
+        expand_bottom = deficit - expand_top
+        row_min = max(row_min - expand_top, 0)
+        row_max = min(row_max + expand_bottom, h - 1)
+        # redistribute if clamped on one side
+        crop_h = row_max - row_min + 1
+        if crop_h < min_side:
+            row_min = max(row_max - min_side + 1, 0)
+            row_max = min(row_min + min_side - 1, h - 1)
+
+    if crop_w < min_side:
+        deficit = min_side - crop_w
+        expand_left = deficit // 2
+        expand_right = deficit - expand_left
+        col_min = max(col_min - expand_left, 0)
+        col_max = min(col_max + expand_right, w - 1)
+        crop_w = col_max - col_min + 1
+        if crop_w < min_side:
+            col_min = max(col_max - min_side + 1, 0)
+            col_max = min(col_min + min_side - 1, w - 1)
+
     box = CropBox(
         original_w=w,
         original_h=h,
@@ -78,10 +108,10 @@ def crop_to_content(
     return cropped, box
 
 
-def clean_alpha_noise(img: Image.Image, threshold: int = 4) -> Image.Image:
+def clean_alpha_noise(img: Image.Image) -> Image.Image:
     """Zero out pixels whose alpha is below ``threshold``."""
     rgba = np.array(img.convert("RGBA"))
-    rgba[rgba[:, :, 3] <= threshold] = 0
+    rgba[rgba[:, :, 3] <= ALPHA_THRESHOLD] = 0
     return Image.fromarray(rgba, mode="RGBA")
 
 
@@ -94,6 +124,16 @@ def restore_from_crop(img: Image.Image, box: CropBox) -> Image.Image:
     canvas = Image.new("RGBA", (box.original_w, box.original_h), (0, 0, 0, 0))
     canvas.paste(img, (box.pad_left, box.pad_top))
     return canvas
+
+def is_empty_layer(img: Image.Image) -> bool:
+    rgb = np.array(img.convert("RGB"))
+    rgba = np.array(img.convert("RGBA"))
+
+    if rgb.std() == 0 and rgba[:, :, 3].max() == 0:
+        return True
+    return False
+
+    return np.all(rgba[:, :, 3] == 0)
 
 def pad_rgba_to_multiple_edge(img: Image.Image, multiple: int):
     w, h = img.size
@@ -150,14 +190,14 @@ def create_psd(images: list[Image.Image], output_path: str) -> None:
             channels={
                 ChannelId.transparency: rgba[:, :, 3],
                 ChannelId.red: rgba[:, :, 0],
-                ChannelId.green: rgba[:, :, 1],  
+                ChannelId.green: rgba[:, :, 1],
                 ChannelId.blue: rgba[:, :, 2],
             },
             opacity=255,
         ))
 
     psd = nested_layers_to_psd(
-        psd_layers, color_mode=ColorMode.rgb, compression=Compression.raw,
+        psd_layers, color_mode=ColorMode.rgb, compression=Compression.rle,
     )
 
     with open(output_path, 'wb') as f:

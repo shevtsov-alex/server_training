@@ -22,11 +22,9 @@ API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     raise RuntimeError("GEMINI_API_KEY is not set in .env file")
 
-CONTAINS_CHARACTER_PROMPT = (
-    "Look at the first image (reference). "
-    "Does the second image contain any body parts or a character "
-    "from the first image? Answer strictly with one word: yes or no."
-)
+CONTAINS_CHARACTER_PROMPT = """Look at the first image (reference). 
+Does the second image contain any body parts or a character from the first image? 
+Answer strictly with one word: yes or no."""
 
 
 def _get_client() -> genai.Client:
@@ -53,7 +51,7 @@ def contains_character(reference: Image.Image, candidate: Image.Image) -> bool:
         )
 
         answer = response.text.replace("\n", "").replace("`", "").strip().lower()
-        print(f"Gemini raw answer: {answer}")
+        #print(f"Gemini raw answer: {answer}")
 
         if answer == "yes":
             return True
