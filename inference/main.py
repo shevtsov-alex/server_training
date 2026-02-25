@@ -50,7 +50,7 @@ def process_single_level(original_image: Image.Image, images: list[Image.Image],
     return ready_layers, character_layers
 
 
-def main(input_image: str, level_num: int):
+def main(input_image: str, level_num: int, psd_output: bool, output_dir: str):
     print("Loading input image...")
     original_img = Image.open(input_image).convert("RGBA")
     print(f"Input image loaded: {original_img.size}")
@@ -87,11 +87,14 @@ def main(input_image: str, level_num: int):
     total_elapsed = time.time() - total_start
     print(f"Ready layers: {len(ready_layers)}")
     print(f"Total processing time: {total_elapsed:.2f}s")
-    cnt = 0
-    for img in ready_layers:
-        img.save(input_image.split(".png")[0] + f"_{cnt}_ready.png")
-        cnt += 1
-    create_psd(ready_layers, input_image.split(".png")[0] + "_layers.psd")
+
+    if psd_output:
+        output_path = os.path.join(output_dir, input_image.split('/')[-1].split(".png")[0] + "_layers.psd")
+        create_psd(ready_layers, output_path)
+    else:
+        output_path = output_dir + input_image.split('/')[-1].split(".png")[0]
+        for i, img in enumerate(ready_layers):
+            img.save(output_path + f"_layer_{i}.png")
 
             
 
@@ -99,6 +102,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_image", type=str, dest="input_image", required=True)
     parser.add_argument("--level_num", type=str, dest="level_num", default=0, required=False)
+    parser.add_argument("--output_type", type=str, dest="output_type", default='psd', required=False, choices=['psd', 'png'])
+    parser.add_argument("--output_dir", type=str, dest="output_dir", default='./output', required=False)
     return parser.parse_args()
 
 args = parse_args()
@@ -109,5 +114,10 @@ if __name__ == "__main__":
         print(f"Level number is not set, execution of full level pipeline will be performed")
     elif args.level_num < 0 or args.level_num > 3:
         raise ValueError(f"Level number must be between 0 and 3: {args.level_num}")
+    
+    os.makedirs(args.output_dir, exist_ok=True)
+    if not args.output_dir.endswith('/'):
+        args.output_dir += '/'
 
-    main(input_image=args.input_image, level_num=args.level_num)
+    main(input_image=args.input_image, level_num=args.level_num, 
+         psd_output=args.output_type == 'psd', output_dir=args.output_dir)
