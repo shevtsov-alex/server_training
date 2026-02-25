@@ -24,3 +24,24 @@ parameters:
  - model_version layered 
  - log_with tensorboard 
  - remove_first_image_from_target
+
+ ## Inference 
+ Для использования пайплайна для инференса нужно установить зависимости:
+ ```bash
+ python3 -m venv .venv
+ source .venv/bin/activate
+
+ pip install -r inference/requirements.txt
+ ```
+
+
+ После установки библиотек запускаем inference через коммандную строку:
+ ```bash
+ python3 inference/main.py  --input_image /path/to/input/image.png --output_type psd --output_dir /path/where/to/store/output/file
+ ```
+
+ Параметры:
+  - input_image: Путь к картинке входного изображения для нарезки
+  - output_type: Категория файла для сохранения результата (psd или png)
+  - output_dir: Директория где будет сохранён результат 
+ 
