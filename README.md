@@ -25,14 +25,28 @@ parameters:
  - log_with tensorboard 
  - remove_first_image_from_target
 
- ## Inference 
- Для использования пайплайна для инференса нужно установить зависимости:
- ```bash
- python3 -m venv .venv
- source .venv/bin/activate
+## Inference 
+Для использования пайплайна для инференса нужно установить зависимости:
 
- pip install -r inference/requirements.txt
- ```
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install -r inference/requirements.txt
+```
+
+Скачать и сохранить модель в удобном локальном пути:
+```bash
+huggingface-cli download playrix/Qwen-Image-Layered --local-dir /path/to/your/model/directory --local-dir-use-symlinks False
+```
+Замените `/path/to/your/model/directory` на путь к папке, куда вы хотите сохранить модель. Это значение затем используйте как `BASE_PATH` в файле `.env`.
+
+Так же нужно создать inference/.env файл конфигурации где будут хранится слудующая информация:
+```python
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY' # API ключ для gemini модели для фильтрации
+BASE_PATH = "YOUR_MODEL_BASE_PATH" # Локальный путь где сохранена скачанная модель
+```
 
 
  После установки библиотек запускаем inference через коммандную строку:

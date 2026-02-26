@@ -21,7 +21,7 @@ Keep internal shadows that define the character's body and clothes. Exclude shad
 Layer Hierarchy: Characters (Each person isolated with their handheld objects), Foreground (Any object blocking or overlapping a character must be its own separate layer) and Background (The remaining environment including all floor and wall shadows). 
 """
 
-MODEL = QIL(device="cuda", dtype=torch.bfloat16, model_type="hf")#QIL(device="cuda", dtype=torch.bfloat16)
+MODEL = None
 SCALE_MAX_SIDE = 1024
 
 
@@ -102,6 +102,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_image", type=str, dest="input_image", required=True)
     parser.add_argument("--level_num", type=str, dest="level_num", default=0, required=False)
+    parser.add_argument("--pipe_type", type=str, dest="pipe_type", default='hf', required=False, choices=['hf', 'diffsynth'])
     parser.add_argument("--output_type", type=str, dest="output_type", default='psd', required=False, choices=['psd', 'png'])
     parser.add_argument("--output_dir", type=str, dest="output_dir", default='./output', required=False)
     return parser.parse_args()
@@ -114,6 +115,8 @@ if __name__ == "__main__":
         print(f"Level number is not set, execution of full level pipeline will be performed")
     elif args.level_num < 0 or args.level_num > 3:
         raise ValueError(f"Level number must be between 0 and 3: {args.level_num}")
+    
+    MODEL = QIL(device="cuda", dtype=torch.bfloat16, model_type=args.pipe_type)
     
     os.makedirs(args.output_dir, exist_ok=True)
     if not args.output_dir.endswith('/'):
