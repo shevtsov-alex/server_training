@@ -6,3 +6,4 @@ pytoshop
 google-genai
 diffsynth
 torch
+git+https://github.com/huggingface/diffusers.git
