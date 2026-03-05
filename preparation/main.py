@@ -7,7 +7,11 @@ import subprocess
 import hashlib, os, sys
 from pathlib import Path
 from psd_tools import PSDImage
-from PIL import Image
+from PIL import Image, ImageDraw
+from image_processing import compute_content_box, crop_to_box
+from anotation import process_file
+import json
+from collections import defaultdict
 
 
 Base_prompt = """
@@ -24,6 +28,13 @@ Prompts_by_level = ["L1_ENTITY ISOLATE CLEAN_EDGE character person environment s
                     "L4_DETAILED ISOLATE CLEAN_EDGE detailed micro parts"]
 
 OUTPUT_FILE_COUNT = 0
+
+ARROW_WIDTH = 400
+ARROW_PAD = 60
+ARROW_HEAD_HALF_H = 120
+ARROW_SHAFT_HALF_H = 60
+ARROW_MARGIN = 80
+STRIP_HEIGHT = 200
 
 def collect_all_layers(layer_container, layer_list: list):
     """Recursively collect all extractable layers in z-order (bottom to top)."""
@@ -45,7 +56,7 @@ def get_image_hash(image: Image.Image) -> str:
     return hashlib.md5(image.tobytes()).hexdigest()
 
 
-def extract_layers_from_psd(psd_path: Path, output_dir: Path, total_layers: int) -> int:
+def extract_layers_from_psd(psd_path: Path, output_dir: Path, total_layers: int, strip_dir: bool) -> int:
     global OUTPUT_FILE_COUNT
     """
     Extract all layers from a PSD or PSB file as PNG images with RGBA.
@@ -61,6 +72,7 @@ def extract_layers_from_psd(psd_path: Path, output_dir: Path, total_layers: int)
         FileNotFoundError: If PSD/PSB file doesn't exist
         ValueError: If file cannot be read as PSD/PSB
     """
+    
     if not psd_path.exists():
         raise FileNotFoundError(f"PSD/PSB file does not exist: {psd_path}")
     
@@ -77,26 +89,15 @@ def extract_layers_from_psd(psd_path: Path, output_dir: Path, total_layers: int)
     layers_extracted = []
     has_stored_layers = False
 
+    psd_level = int(base_name[-1])
+    filename = ""
+
     # Remove PNG files related to the current PSD file in the output folder
     for file in output_dir.glob(f"{base_name}_*.png"):
         try:
             file.unlink()
         except Exception as e:
             print(f"Warning: Failed to remove file {file}: {e}")
-
-    # Save the composite (total/flattened) image
-    """
-    try:
-        composite_image = psd.topil()
-        if composite_image is not None:
-            if composite_image.mode != 'RGBA':
-                composite_image = composite_image.convert('RGBA')
-            composite_path = output_dir / f"{base_name}.png"
-            composite_image.save(composite_path, 'PNG')
-            print(f"Saved composite image: {composite_path.name}")
-    except Exception as e:
-        print(f"Warning: Failed to extract composite image: {e}")
-    """
 
     all_layers = []
     collect_all_layers(psd, all_layers)
@@ -107,6 +108,7 @@ def extract_layers_from_psd(psd_path: Path, output_dir: Path, total_layers: int)
     layer_hashes = {}
     duplicate_groups = {}
     layer_file_index = 1
+    unique_layers = []
     
     for layer_index, layer in enumerate(all_layers):
         layer_image = layer.topil()
@@ -135,40 +137,65 @@ def extract_layers_from_psd(psd_path: Path, output_dir: Path, total_layers: int)
             if has_stored_layers == False:
                 OUTPUT_FILE_COUNT += 1
                 has_stored_layers = True
-                output_path = output_dir / f"{OUTPUT_FILE_COUNT}.png"
-                with open(output_dir / f"{OUTPUT_FILE_COUNT}.txt", 'w+') as f:
-                    level = int(base_name[-1])
-                    if level not in range(0, len(Prompts_by_level)):
-                        raise ValueError(f"Level {level} is not valid in file {base_name}")
-                    f.write(f"{Prompts_by_level[level]}\n{Base_prompt}")
+                
             layer_hashes[image_hash] = (layer_index, layer_name)
-            if layer_file_index == len(all_layers):
-                output_path = output_dir / f"{OUTPUT_FILE_COUNT}.png"
-            else:
-                output_path = output_dir / f"{OUTPUT_FILE_COUNT}_{layer_file_index}.png"
-            canvas_image.save(output_path, 'PNG')
-            layer_file_index += 1
-            #layers_extracted.append(canvas_image)
+            unique_layers.append(canvas_image)
+    if unique_layers:
+        content_box = compute_content_box(unique_layers[-1])
+        cropped_layers = [crop_to_box(img, content_box) for img in unique_layers]
 
-    """
-    extracted_count = layer_file_index - 1
-    if extracted_count < total_layers:
-        empty_canvas = Image.new('RGBA', (canvas_width, canvas_height), (0, 0, 0, 0))
-        for _ in range(total_layers - extracted_count):
-            output_path = output_dir / f"{base_name}_{layer_file_index}.png"
-            empty_canvas.save(output_path, 'PNG')
-            layer_file_index += 1
-        print(
-            f"Added {total_layers - extracted_count} empty layer(s) "
-            f"for {base_name} to reach {total_layers}"
-        )
-    """
+        if not strip_dir:
+
+            for i, cropped in enumerate(cropped_layers):
+                if i == len(cropped_layers) - 1:
+                    output_path = output_dir / f"{OUTPUT_FILE_COUNT}.png"
+                    filename = f"{OUTPUT_FILE_COUNT}.png"
+                else:
+                    output_path = output_dir / f"{OUTPUT_FILE_COUNT}_{i + 1}.png"
+                cropped.save(output_path, 'PNG')
+
+            composite_path = output_dir / f"{OUTPUT_FILE_COUNT}.png"
+            """
+            level = int(base_name[-1])
+            keep, caption = process_file(level, composite_path)
+
+            if keep:
+                with open(output_dir / f"{OUTPUT_FILE_COUNT}.txt", 'w+') as f:
+                    f.write(caption)
+            """
+
+        composite = cropped_layers[-1]
+        sub_layers = cropped_layers[:-1]
+        if sub_layers and strip_dir:
+            crop_w, crop_h = composite.size
+            scale = STRIP_HEIGHT / crop_h
+            scaled_w = int(crop_w * scale)
+
+            sub_layers = [img.resize((scaled_w, STRIP_HEIGHT), Image.LANCZOS) for img in sub_layers]
+
+            separator_w = 4
+            total_w = scaled_w * len(sub_layers) + separator_w * (len(sub_layers) - 1)
+            strip = Image.new('RGBA', (total_w, STRIP_HEIGHT), (0, 0, 0, 0))
+
+            for i, layer_img in enumerate(sub_layers):
+                x = i * (scaled_w + separator_w)
+                strip.paste(layer_img, (x, 0))
+                if i < len(sub_layers) - 1:
+                    strip.paste(Image.new('RGBA', (separator_w, STRIP_HEIGHT), (0, 0, 0, 255)), (x + scaled_w, 0))
+
+            strip.save(output_dir / f"{base_name}_strip.png", 'PNG')
+
+            composite_scaled = composite.resize((scaled_w, STRIP_HEIGHT), Image.LANCZOS)
+            composite_scaled.save(output_dir / f"{base_name}_strip_1.png", 'PNG')
+
+    return filename, psd_level
 
 
-def main(src_dir: str, output_dir: str, total_layers: int):
+def main(src_dir: str, output_dir: str, total_layers: int, strip_dir: bool):
     """Main function to process all PSD and PSB files from src folder."""
     src_dir = Path(src_dir)
     output_dir = Path(output_dir)
+    archive = defaultdict(lambda : -1)
     
     psd_files = sorted(list(src_dir.glob("*.psd")) + list(src_dir.glob("*.psb")))
     
@@ -181,17 +208,20 @@ def main(src_dir: str, output_dir: str, total_layers: int):
     for psd_file in psd_files:
         print(f"Processing: {psd_file.name}")
         try:
-            count = extract_layers_from_psd(psd_file, output_dir, total_layers)
-            print(f"Extracted {count} layer(s) from {psd_file.name}\n")
+            filename, psd_level = extract_layers_from_psd(psd_file, output_dir, total_layers, strip_dir)
+            archive[filename] = psd_level
         except Exception as e:
             print(f"Error processing {psd_file.name}: {e}\n")
     
     print(f"All layers saved to: {output_dir}")
+    with open(output_dir / "mapped_levels.json", 'w+') as f:
+        json.dump(archive, f)
 
 parser = argparse.ArgumentParser(description="Extract layers from PSD and PSB files")
 parser.add_argument("--total_layers", type=int, default=1, help="Total layers to extract")
 parser.add_argument("--src_dir", type=str, default="./src", help="Source directory")
 parser.add_argument("--output_dir", type=str, default="./output", help="Output directory")
+parser.add_argument("--strip", action="store_true", default=False, help="Create strip files")
 
 
 if __name__ == "__main__":
@@ -202,4 +232,4 @@ if __name__ == "__main__":
         raise FileNotFoundError(f"Output directory does not exist or is not a directory: {args.output_dir}")
     if args.total_layers < 1:
         raise ValueError(f"Total layers must be at least 1: {args.total_layers}")
-    main(args.src_dir, args.output_dir, args.total_layers)
+    main(args.src_dir, args.output_dir, args.total_layers, args.strip)
